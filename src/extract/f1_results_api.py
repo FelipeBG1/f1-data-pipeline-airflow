@@ -2,26 +2,39 @@ import requests
 import pandas as pd
 import copy
 
-def fetch_race_results(season):
+def fetch_race_results_by_season(season):
     url = f"https://api.jolpi.ca/ergast/f1/{season}/results/"
 
     parameters = {
         "limit": 100,
         "offset": 0
     }
-    next_page = True
-    total = 0
+
     races_by_key = {}
+
     try:
-        while next_page:
+        while True:
             response = requests.get(url=url, params=parameters)
             response.raise_for_status()
             data = response.json()
 
-            races = data["MRData"]["RaceTable"]["Races"]
+            mr_data = data.get("MRData", {})
+            total = int(mr_data.get("total", 0))
+
+            races = (
+                mr_data
+                .get("RaceTable", {})
+                .get("Races", [])
+            )
+
+            if not races:
+                print(
+                    f"No races found for season={season}, "
+                    f"offset={parameters['offset']}"
+                )
 
             for race in races:
-                key = (race["season"], race["round"])
+                key = (race.get("season"), race.get("round"))
 
                 results = race.get("Results", [])
 
@@ -31,59 +44,81 @@ def fetch_race_results(season):
                     races_by_key[key] = race_copy
 
                 races_by_key[key]["Results"].extend(results)
- 
 
-            total = int(data["MRData"].get("total"))
+            parameters["offset"] += parameters["limit"]
 
-            if parameters["offset"] < total:
-                parameters["offset"] += parameters["limit"]
-            else:
-                next_page = False
+            if parameters["offset"] >= total:
+                break
 
-        all_races = list(races_by_key.values())
+        return list(races_by_key.values())
 
-        return all_races
     except requests.exceptions.RequestException as e:
-        print(e)
-        return None
-    
+        print(f"Error fetching season {season}: {e}")
+        return []
+
+def fetch_race_results_by_range(start_season, end_season):
+    all_races = []
+
+    for season in range(start_season, end_season + 1):
+        season_races = fetch_race_results_by_season(season)
+
+        if not season_races:
+            print(f"No races found for season {season}")
+            continue
+
+        all_races.extend(season_races)
+
+    return all_races
 
 def parse_race_results(races):
-    rows = []
-    for race in races:
-        for result in race["Results"]:
-            row = {
-                "season": race["season"],
-                "round": race["round"],
-                "race_name": race["raceName"],
-                "race_date": race["date"],
-                
-                "circuit_id": race["Circuit"]["circuitId"],
-                "circuit_name": race["Circuit"]["circuitName"],
-                "country": race["Circuit"]["Location"]["country"],
-                "locality": race["Circuit"]["Location"]["locality"],
+    if not races:
+        raise ValueError("No races received to parse.")
 
-                "driver_id": result["Driver"]["driverId"],
-                "driver_code": result["Driver"].get("code"),
-                "driver_number": result["Driver"].get("permanentNumber"),
-                "driver_first_name": result["Driver"]["givenName"],
-                "driver_last_name": result["Driver"]["familyName"],
-                "driver_nationality": result["Driver"]["nationality"],
-                
+    rows = []
+
+    for race in races:
+        results = race.get("Results", [])
+
+        if not results:
+            print(
+                f"No results found for season={race.get('season')} "
+                f"round={race.get('round')}"
+            )
+            continue
+
+        for result in results:
+            row = {
+                "season": race.get("season"),
+                "round": race.get("round"),
+                "race_name": race.get("raceName"),
+                "race_date": race.get("date"),
+
+                "circuit_id": race.get("Circuit", {}).get("circuitId"),
+                "circuit_name": race.get("Circuit", {}).get("circuitName"),
+                "country": race.get("Circuit", {}).get("Location", {}).get("country"),
+                "locality": race.get("Circuit", {}).get("Location", {}).get("locality"),
+
+                "driver_id": result.get("Driver", {}).get("driverId"),
+                "driver_code": result.get("Driver", {}).get("code"),
+                "driver_number": result.get("Driver", {}).get("permanentNumber"),
+                "driver_first_name": result.get("Driver", {}).get("givenName"),
+                "driver_last_name": result.get("Driver", {}).get("familyName"),
+                "driver_nationality": result.get("Driver", {}).get("nationality"),
+
                 "constructor_id": result.get("Constructor", {}).get("constructorId"),
                 "constructor_name": result.get("Constructor", {}).get("name"),
                 "constructor_nationality": result.get("Constructor", {}).get("nationality"),
 
                 "grid": result.get("grid"),
-                "position": result["position"],
-                "position_text": result["positionText"],
-                "points": result["points"],
+                "position": result.get("position"),
+                "position_text": result.get("positionText"),
+                "points": result.get("points"),
                 "laps": result.get("laps"),
                 "status": result.get("status"),
 
                 "race_time": result.get("Time", {}).get("time"),
                 "race_time_millis": result.get("Time", {}).get("millis"),
-                
+
                 "fastest_lap_rank": result.get("FastestLap", {}).get("rank"),
                 "fastest_lap_lap": result.get("FastestLap", {}).get("lap"),
                 "fastest_lap_time": result.get("FastestLap", {}).get("Time", {}).get("time"),
@@ -91,6 +126,5 @@ def parse_race_results(races):
             }
 
             rows.append(row)
-    
-    df = pd.DataFrame(rows)
-    return df
+
+    return pd.DataFrame(rows)

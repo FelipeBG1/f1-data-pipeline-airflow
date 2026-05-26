@@ -10,8 +10,8 @@ def read_from_db(table):
     finally:
         engine.dispose()
 
-def read_from_db_by_query(query):
-    engine = get_engine()
+def read_from_db_by_query(query, env_path=".env"):
+    engine = get_engine(env_path)
     try:     
         df = pd.read_sql(query, con=engine)
         return df

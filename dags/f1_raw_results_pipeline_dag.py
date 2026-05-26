@@ -9,7 +9,7 @@ from airflow.operators.python import PythonOperator
 
 from src.load.save_to_db import save_to_db
 from src.load.load_dimensional_model import build_and_load_dimensional_model
-from src.extract.f1_results_api import fetch_race_results, parse_race_results
+from src.extract.f1_results_api import fetch_race_results_by_season, fetch_race_results_by_range, parse_race_results
 from src.transform.build_analytics_marts import create_driver_season_stats
 
 logging.basicConfig(
@@ -27,7 +27,7 @@ default_args = {
 
 def save_raw_results_to_db():
     logger.info("Starting data ingestion from API")
-    all_results = fetch_race_results("2025")
+    all_results = fetch_race_results_by_range(2000,2007)
 
     logger.info("Parsing races results from API")
     df = parse_race_results(all_results)

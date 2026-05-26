@@ -3,8 +3,6 @@ import psycopg2 as psy
 from sqlalchemy import create_engine
 from dotenv import load_dotenv
 
-load_dotenv()
-
 def validate_env_variables():
     required_vars = [
         "DB_USER",
@@ -19,6 +17,7 @@ def validate_env_variables():
             raise ValueError(f"{var} is not set in environment variables")
 
 def get_connection():
+    load_dotenv()
     validate_env_variables()
     connection = psy.connect(database= os.getenv("DB_NAME"), 
                             user = os.getenv("DB_USER"), 
@@ -29,7 +28,8 @@ def get_connection():
     return connection
 
 
-def get_engine():
+def get_engine(env_path=".env"):
+    load_dotenv(env_path, override=True)
     validate_env_variables()
     connection_string = f"postgresql+psycopg2://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
     return create_engine(connection_string)
